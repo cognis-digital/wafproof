@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cognis-wafproof"
+version = "0.1.0"
+description = "Measure how well your own detection rules catch known-bad inputs without flagging benign look-alikes. Defensive validation tooling."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Cognis Digital" }]
+maintainers = [{ name = "Cognis Digital" }]
+keywords = ["waf", "detection", "security", "testing", "regex", "defensive", "ci"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Testing",
+]
+
+[project.urls]
+Homepage = "https://github.com/cognis-digital/wafproof"
+
+[project.scripts]
+wafproof = "wafproof.cli:main"
+
+[tool.setuptools]
+packages = ["wafproof"]
+
+[tool.setuptools.package-data]
+wafproof = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

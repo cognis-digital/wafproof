@@ -1,0 +1,84 @@
+{
+  "name": "wafproof-sample-ruleset",
+  "description": "An original, illustrative regex ruleset authored by Cognis Digital for tuning detection coverage. Patterns are intentionally conservative: each targets a structural shape of an attack class rather than a keyword, so that benign look-alikes in the corpus are not flagged. Use this as a starting point and a worked example of how to express rules for wafproof.",
+  "rules": [
+    {
+      "id": "xss-script-open",
+      "category": "xss",
+      "pattern": "<\\s*script\\b",
+      "flags": ["i"]
+    },
+    {
+      "id": "xss-event-handler",
+      "category": "xss",
+      "pattern": "<[^>]*\\bon[a-z]+\\s*=",
+      "flags": ["i"]
+    },
+    {
+      "id": "xss-js-uri",
+      "category": "xss",
+      "pattern": "javascript\\s*:",
+      "flags": ["i"]
+    },
+    {
+      "id": "sqli-tautology",
+      "category": "sqli",
+      "pattern": "'\\s*or\\s+'?\\d",
+      "flags": ["i"]
+    },
+    {
+      "id": "sqli-union-select",
+      "category": "sqli",
+      "pattern": "\\bunion\\b[\\s\\S]*\\bselect\\b",
+      "flags": ["i"]
+    },
+    {
+      "id": "sqli-comment-tail",
+      "category": "sqli",
+      "pattern": "'\\s*(--|#)",
+      "flags": ["i"]
+    },
+    {
+      "id": "sqli-stacked-statement",
+      "category": "sqli",
+      "pattern": ";\\s*(drop|delete|truncate|insert|update)\\b",
+      "flags": ["i"]
+    },
+    {
+      "id": "pt-dotdot-slash",
+      "category": "path-traversal",
+      "pattern": "(\\.\\./){2,}",
+      "flags": []
+    },
+    {
+      "id": "pt-dotdot-backslash",
+      "category": "path-traversal",
+      "pattern": "(\\.\\.\\\\){2,}",
+      "flags": []
+    },
+    {
+      "id": "pt-encoded-dotdot",
+      "category": "path-traversal",
+      "pattern": "(%2e%2e%2f){2,}",
+      "flags": ["i"]
+    },
+    {
+      "id": "ci-chain-command",
+      "category": "command-injection",
+      "pattern": "[;&]\\s*(id|ls|cat|whoami|uname|nc|sh|bash|curl|wget|ping|rm)\\b",
+      "flags": ["i"]
+    },
+    {
+      "id": "ci-pipe-command",
+      "category": "command-injection",
+      "pattern": "\\|\\s*(cat|ls|id|whoami|nc|sh|bash)\\b",
+      "flags": ["i"]
+    },
+    {
+      "id": "ci-command-substitution",
+      "category": "command-injection",
+      "pattern": "`[^`]+`|\\$\\([^)]+\\)",
+      "flags": []
+    }
+  ]
+}
