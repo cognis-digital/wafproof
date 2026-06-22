@@ -333,3 +333,7 @@ actually sees and add them via `--corpus`.
 ---
 
 Maintained by **Cognis Digital**.
+
+## Bundled vulnerability database
+
+Ships `wafproof/cognis_vulndb.jsonl.gz` — **262,351 real vulnerabilities** (OSV across 7 ecosystems) with detailed metadata; offline stdlib loader `vulndb_local.VulnDB`, air-gap ready.
