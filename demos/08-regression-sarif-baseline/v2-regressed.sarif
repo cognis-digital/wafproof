@@ -1,0 +1,227 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemas/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "wafproof",
+          "informationUri": "https://github.com/cognis-digital/wafproof",
+          "version": "0.1.0",
+          "organization": "Cognis Digital",
+          "rules": [
+            {
+              "id": "wafproof/coverage-gap",
+              "name": "DetectionCoverageGap",
+              "shortDescription": {
+                "text": "Detector missed a known-malicious canary"
+              },
+              "fullDescription": {
+                "text": "The detector under test did not flag a corpus entry labeled malicious. This is a false negative: a coverage gap where a known-bad input would slip through."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "detection-quality"
+                ]
+              }
+            },
+            {
+              "id": "wafproof/false-alarm",
+              "name": "BenignFalseAlarm",
+              "shortDescription": {
+                "text": "Detector flagged a benign look-alike"
+              },
+              "fullDescription": {
+                "text": "The detector under test flagged a corpus entry labeled benign. This is a false positive: legitimate traffic that would be wrongly blocked."
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "detection-quality"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "wafproof/coverage-gap",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "Missed malicious canary [sqli] 'sqli-union-select': the detector should have flagged this but did not."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "corpus/sqli/sqli-union-select#malicious",
+                  "uriBaseId": "CORPUS"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "sqli-union-select",
+                  "kind": "member"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "wafproofCanaryId/v1": "3c1ef8eab8fdb92e"
+          },
+          "properties": {
+            "category": "sqli",
+            "label": "malicious",
+            "outcome": "FN",
+            "canaryId": "sqli-union-select"
+          }
+        },
+        {
+          "ruleId": "wafproof/coverage-gap",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "Missed malicious canary [sqli] 'sqli-comment-bypass': the detector should have flagged this but did not."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "corpus/sqli/sqli-comment-bypass#malicious",
+                  "uriBaseId": "CORPUS"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "sqli-comment-bypass",
+                  "kind": "member"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "wafproofCanaryId/v1": "db212963cdef5003"
+          },
+          "properties": {
+            "category": "sqli",
+            "label": "malicious",
+            "outcome": "FN",
+            "canaryId": "sqli-comment-bypass"
+          }
+        },
+        {
+          "ruleId": "wafproof/coverage-gap",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "Missed malicious canary [sqli] 'sqli-stacked-drop': the detector should have flagged this but did not."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "corpus/sqli/sqli-stacked-drop#malicious",
+                  "uriBaseId": "CORPUS"
+                }
+              },
+              "logicalLocations": [
+                {
+                  "name": "sqli-stacked-drop",
+                  "kind": "member"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "wafproofCanaryId/v1": "5bccfed24a5188eb"
+          },
+          "properties": {
+            "category": "sqli",
+            "label": "malicious",
+            "outcome": "FN",
+            "canaryId": "sqli-stacked-drop"
+          }
+        }
+      ],
+      "columnKind": "utf16CodeUnits",
+      "properties": {
+        "metrics": {
+          "tp": 12,
+          "fp": 0,
+          "fn": 3,
+          "tn": 12,
+          "total": 27,
+          "precision": 1.0,
+          "recall": 0.8,
+          "detection_rate": 0.8,
+          "false_positive_rate": 0.0,
+          "f1": 0.888889,
+          "accuracy": 0.888889
+        },
+        "perCategory": {
+          "command-injection": {
+            "tp": 4,
+            "fp": 0,
+            "fn": 0,
+            "tn": 3,
+            "total": 7,
+            "precision": 1.0,
+            "recall": 1.0,
+            "detection_rate": 1.0,
+            "false_positive_rate": 0.0,
+            "f1": 1.0,
+            "accuracy": 1.0
+          },
+          "path-traversal": {
+            "tp": 3,
+            "fp": 0,
+            "fn": 0,
+            "tn": 3,
+            "total": 6,
+            "precision": 1.0,
+            "recall": 1.0,
+            "detection_rate": 1.0,
+            "false_positive_rate": 0.0,
+            "f1": 1.0,
+            "accuracy": 1.0
+          },
+          "sqli": {
+            "tp": 1,
+            "fp": 0,
+            "fn": 3,
+            "tn": 3,
+            "total": 7,
+            "precision": 1.0,
+            "recall": 0.25,
+            "detection_rate": 0.25,
+            "false_positive_rate": 0.0,
+            "f1": 0.4,
+            "accuracy": 0.571429
+          },
+          "xss": {
+            "tp": 4,
+            "fp": 0,
+            "fn": 0,
+            "tn": 3,
+            "total": 7,
+            "precision": 1.0,
+            "recall": 1.0,
+            "detection_rate": 1.0,
+            "false_positive_rate": 0.0,
+            "f1": 1.0,
+            "accuracy": 1.0
+          }
+        }
+      }
+    }
+  ]
+}

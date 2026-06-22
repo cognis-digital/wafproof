@@ -25,6 +25,7 @@ from .detector import (
     ruleset_detector,
 )
 from .metrics import Evaluation, evaluate
+from .sarif import evaluation_to_sarif
 
 
 # ---------------------------------------------------------------------------
@@ -73,6 +74,18 @@ def _fmt_pct(value: float) -> str:
     return f"{value * 100:6.2f}%"
 
 
+def _write_sarif(ev: Evaluation, dest: str) -> None:
+    """Write a SARIF 2.1.0 log of the evaluation's FN/FP findings.
+
+    ``dest`` of '-' writes to stdout; any other value is a file path.
+    """
+    doc = json.dumps(evaluation_to_sarif(ev), indent=2)
+    if dest == "-":
+        print(doc)
+    else:
+        Path(dest).write_text(doc + "\n", encoding="utf-8")
+
+
 def _print_table(ev: Evaluation) -> None:
     o = ev.overall
     print("Detection evaluation")
@@ -114,9 +127,13 @@ def cmd_run(args) -> int:
     corpus = _load_corpus(args.corpus)
     detector, _ = _build_detector(args)
     ev = evaluate(detector, corpus)
+    if getattr(args, "sarif", None):
+        _write_sarif(ev, args.sarif)
+        if args.sarif != "-" and not args.json:
+            print(f"wrote SARIF 2.1.0 report to {args.sarif}")
     if args.json:
         print(json.dumps(ev.as_dict(), indent=2))
-    else:
+    elif not args.sarif or args.sarif != "-":
         _print_table(ev)
     return 0
 
@@ -150,6 +167,11 @@ def cmd_report(args) -> int:
     ev = evaluate(detector, corpus)
     recall = ev.overall.recall
     passed = recall >= args.fail_under
+
+    if getattr(args, "sarif", None):
+        _write_sarif(ev, args.sarif)
+        if args.sarif != "-" and not args.json:
+            print(f"wrote SARIF 2.1.0 report to {args.sarif}")
 
     if args.json:
         out = ev.as_dict()
@@ -203,6 +225,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_run = sub.add_parser("run", help="evaluate a detector against the corpus")
     _add_detector_args(p_run)
     p_run.add_argument("--json", action="store_true", help="emit JSON results")
+    p_run.add_argument(
+        "--sarif",
+        metavar="FILE",
+        help="also write a SARIF 2.1.0 report of FN/FP findings ('-' for stdout)",
+    )
     p_run.set_defaults(func=cmd_run)
 
     p_corpus = sub.add_parser("corpus", help="list the labeled corpus")
@@ -225,6 +252,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="exit non-zero if recall is below X (0..1, default 0.8)",
     )
     p_report.add_argument("--json", action="store_true", help="emit JSON results")
+    p_report.add_argument(
+        "--sarif",
+        metavar="FILE",
+        help="also write a SARIF 2.1.0 report of FN/FP findings ('-' for stdout)",
+    )
     p_report.set_defaults(func=cmd_report)
 
     return parser

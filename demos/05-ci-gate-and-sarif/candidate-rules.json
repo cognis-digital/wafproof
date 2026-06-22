@@ -1,0 +1,18 @@
+{
+  "name": "candidate-rules-under-review",
+  "description": "A candidate ruleset opened in a PR. It is mostly good but has one over-broad XSS rule (matches the word 'script' anywhere) and is missing the path-traversal backslash rule. Running this through wafproof emits a SARIF report with one false-alarm (warning) and the missed Windows-traversal canaries (error), which appear in the GitHub Security tab.",
+  "rules": [
+    { "id": "xss-keyword-script", "category": "xss", "pattern": "script", "flags": ["i"] },
+    { "id": "xss-event-handler", "category": "xss", "pattern": "<[^>]*\\bon[a-z]+\\s*=", "flags": ["i"] },
+    { "id": "xss-js-uri", "category": "xss", "pattern": "javascript\\s*:", "flags": ["i"] },
+    { "id": "sqli-tautology", "category": "sqli", "pattern": "'\\s*or\\s+'?\\d", "flags": ["i"] },
+    { "id": "sqli-union-select", "category": "sqli", "pattern": "\\bunion\\b[\\s\\S]*\\bselect\\b", "flags": ["i"] },
+    { "id": "sqli-comment-tail", "category": "sqli", "pattern": "'\\s*(--|#)", "flags": ["i"] },
+    { "id": "sqli-stacked-statement", "category": "sqli", "pattern": ";\\s*(drop|delete|truncate|insert|update)\\b", "flags": ["i"] },
+    { "id": "pt-dotdot-slash", "category": "path-traversal", "pattern": "(\\.\\./){2,}", "flags": [] },
+    { "id": "pt-encoded-dotdot", "category": "path-traversal", "pattern": "(%2e%2e%2f){2,}", "flags": ["i"] },
+    { "id": "ci-chain-command", "category": "command-injection", "pattern": "[;&]\\s*(id|ls|cat|whoami|uname|nc|sh|bash|curl|wget|ping|rm)\\b", "flags": ["i"] },
+    { "id": "ci-pipe-command", "category": "command-injection", "pattern": "\\|\\s*(cat|ls|id|whoami|nc|sh|bash)\\b", "flags": ["i"] },
+    { "id": "ci-command-substitution", "category": "command-injection", "pattern": "`[^`]+`|\\$\\([^)]+\\)", "flags": [] }
+  ]
+}

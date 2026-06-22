@@ -1,0 +1,127 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemas/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "wafproof",
+          "informationUri": "https://github.com/cognis-digital/wafproof",
+          "version": "0.1.0",
+          "organization": "Cognis Digital",
+          "rules": [
+            {
+              "id": "wafproof/coverage-gap",
+              "name": "DetectionCoverageGap",
+              "shortDescription": {
+                "text": "Detector missed a known-malicious canary"
+              },
+              "fullDescription": {
+                "text": "The detector under test did not flag a corpus entry labeled malicious. This is a false negative: a coverage gap where a known-bad input would slip through."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "detection-quality"
+                ]
+              }
+            },
+            {
+              "id": "wafproof/false-alarm",
+              "name": "BenignFalseAlarm",
+              "shortDescription": {
+                "text": "Detector flagged a benign look-alike"
+              },
+              "fullDescription": {
+                "text": "The detector under test flagged a corpus entry labeled benign. This is a false positive: legitimate traffic that would be wrongly blocked."
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "security",
+                  "detection-quality"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "results": [],
+      "columnKind": "utf16CodeUnits",
+      "properties": {
+        "metrics": {
+          "tp": 15,
+          "fp": 0,
+          "fn": 0,
+          "tn": 12,
+          "total": 27,
+          "precision": 1.0,
+          "recall": 1.0,
+          "detection_rate": 1.0,
+          "false_positive_rate": 0.0,
+          "f1": 1.0,
+          "accuracy": 1.0
+        },
+        "perCategory": {
+          "command-injection": {
+            "tp": 4,
+            "fp": 0,
+            "fn": 0,
+            "tn": 3,
+            "total": 7,
+            "precision": 1.0,
+            "recall": 1.0,
+            "detection_rate": 1.0,
+            "false_positive_rate": 0.0,
+            "f1": 1.0,
+            "accuracy": 1.0
+          },
+          "path-traversal": {
+            "tp": 3,
+            "fp": 0,
+            "fn": 0,
+            "tn": 3,
+            "total": 6,
+            "precision": 1.0,
+            "recall": 1.0,
+            "detection_rate": 1.0,
+            "false_positive_rate": 0.0,
+            "f1": 1.0,
+            "accuracy": 1.0
+          },
+          "sqli": {
+            "tp": 4,
+            "fp": 0,
+            "fn": 0,
+            "tn": 3,
+            "total": 7,
+            "precision": 1.0,
+            "recall": 1.0,
+            "detection_rate": 1.0,
+            "false_positive_rate": 0.0,
+            "f1": 1.0,
+            "accuracy": 1.0
+          },
+          "xss": {
+            "tp": 4,
+            "fp": 0,
+            "fn": 0,
+            "tn": 3,
+            "total": 7,
+            "precision": 1.0,
+            "recall": 1.0,
+            "detection_rate": 1.0,
+            "false_positive_rate": 0.0,
+            "f1": 1.0,
+            "accuracy": 1.0
+          }
+        }
+      }
+    }
+  ]
+}

@@ -89,6 +89,10 @@ wafproof run --callable mypkg.detect:is_malicious
 Any missed canaries (false negatives) and false alarms (false positives) are
 listed by id and category so you know which rule to fix.
 
+Add `--sarif FILE` (to `run` or `report`) to also emit a **SARIF 2.1.0** report
+of every false negative and false positive — see
+[SARIF export](#sarif-export-code-scanning) below.
+
 ### `wafproof corpus`
 
 List the labeled corpus, optionally filtered by category.
@@ -109,6 +113,54 @@ regressions when someone "simplifies" a rule.
 wafproof report --rules my_rules.json --fail-under 0.8
 echo $?   # 0 if recall >= 0.8, else 1
 ```
+
+## SARIF export (code scanning)
+
+Both `run` and `report` accept `--sarif FILE` (use `-` for stdout) to write a
+**SARIF 2.1.0** log of the evaluation's findings. Each false negative becomes a
+`wafproof/coverage-gap` result (level `error`) and each false positive a
+`wafproof/false-alarm` result (level `warning`); correctly handled entries are
+not findings. The run's recall/precision/FPR are attached under
+`runs[0].properties.metrics`, and every result carries a stable
+`partialFingerprints` value so dashboards dedupe the same finding across runs.
+
+```bash
+wafproof run --rules my_rules.json --sarif wafproof.sarif
+wafproof run --rules my_rules.json --sarif -          # stream to stdout
+```
+
+SARIF is the standard envelope GitHub code scanning, Azure DevOps, and most
+security dashboards already ingest, so a wafproof run drops straight into an
+existing pipeline. A ready-to-copy GitHub Actions workflow lives in
+[`demos/05-ci-gate-and-sarif/`](demos/05-ci-gate-and-sarif/), and
+[`demos/08-regression-sarif-baseline/`](demos/08-regression-sarif-baseline/)
+shows a differential gate that fails only on findings a PR *introduces*.
+
+## Demos
+
+The [`demos/`](demos/) directory holds eight self-contained, real-use-case
+scenarios — each a realistic input file in wafproof's own format plus a
+`SCENARIO.md` (where the data came from, the exact command, expected output, and
+how to act). Highlights:
+
+- **[01](demos/01-tighten-overbroad-rule/)** a keyword blocklist false-blocks the
+  surname `O'Brien` — measure the FP, then fix it.
+- **[02](demos/02-coverage-gap-after-refactor/)** a "simplify the rules" PR
+  silently drops SQLi coverage; the `report` gate fails the merge.
+- **[03](demos/03-custom-app-traffic-corpus/)** bring your own corpus of real app
+  inputs; surfaces a false alarm the generic corpus hides.
+- **[04](demos/04-callable-allowlist-detector/)** evaluate a Python `--callable`
+  allowlist validator and see the precision/recall trade-off it makes.
+- **[05](demos/05-ci-gate-and-sarif/)** GitHub Actions: hard recall gate + SARIF
+  upload to the Security tab.
+- **[06](demos/06-graphql-nosql-corpus/)** define your own categories: NoSQL
+  operator injection and GraphQL abuse.
+- **[07](demos/07-jndi-lookup-canary/)** lookup/expression injection
+  (`${jndi:...}`) including the nested-evasion shape.
+- **[08](demos/08-regression-sarif-baseline/)** a differential gate that fails
+  only on findings a PR introduces vs a SARIF baseline.
+
+See [`demos/README.md`](demos/README.md) for the full index.
 
 ## Supplying a detector
 
@@ -203,10 +255,12 @@ wafproof/
 │   ├── cli.py             # run / corpus / report
 │   ├── corpus.py          # built-in labeled corpus + validation
 │   ├── detector.py        # ruleset + callable loaders
-│   └── metrics.py         # TP/FP/FN/TN, precision/recall/F1, per-category
+│   ├── metrics.py         # TP/FP/FN/TN, precision/recall/F1, per-category
+│   └── sarif.py           # SARIF 2.1.0 export of FN/FP findings
 ├── examples/
 │   └── rules.json         # authored sample ruleset (scores 100% on the corpus)
-├── tests/                 # pytest: metric math, ruleset eval, gate exit codes
+├── demos/                 # 8 real-use-case scenarios, each with a SCENARIO.md
+├── tests/                 # pytest: metric math, ruleset eval, gate, SARIF, demos
 ├── pyproject.toml
 └── .github/workflows/ci.yml
 ```

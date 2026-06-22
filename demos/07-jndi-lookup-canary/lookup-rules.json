@@ -1,0 +1,12 @@
+{
+  "name": "lookup-injection-ruleset",
+  "description": "Rules for lookup/expression injection in logging and templating layers. They flag a ${...} interpolation only when it carries a dangerous lookup scheme (jndi/ldap/rmi/dns/script) OR a nested lookup (a ${ inside another ${ ), which is the common evasion. Plain ${VAR} references and brace-only {placeholder} templates are left alone.",
+  "rules": [
+    { "id": "lookup-dangerous-scheme", "category": "lookup-injection",
+      "pattern": "\\$\\{[^}]*\\b(jndi|ldap|ldaps|rmi|dns|iiop|corba|nis|script|nashorn):",
+      "flags": ["i"] },
+    { "id": "lookup-nested-interpolation", "category": "lookup-injection",
+      "pattern": "\\$\\{[^}]*\\$\\{",
+      "flags": [] }
+  ]
+}

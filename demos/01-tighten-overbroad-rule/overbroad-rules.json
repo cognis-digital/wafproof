@@ -1,0 +1,19 @@
+{
+  "name": "legacy-keyword-blocklist",
+  "description": "A first-generation keyword blocklist. It catches the canaries but is written as bare keyword matches, so it also trips on benign look-alikes like the surname O'Brien and ordinary prose containing 'select' or 'union'. wafproof surfaces those false alarms.",
+  "rules": [
+    { "id": "xss-script-open", "category": "xss", "pattern": "<\\s*script\\b", "flags": ["i"] },
+    { "id": "xss-event-handler", "category": "xss", "pattern": "<[^>]*\\bon[a-z]+\\s*=", "flags": ["i"] },
+    { "id": "xss-js-uri", "category": "xss", "pattern": "javascript\\s*:", "flags": ["i"] },
+    { "id": "sqli-apostrophe", "category": "sqli", "pattern": "'", "flags": [] },
+    { "id": "sqli-keyword-union", "category": "sqli", "pattern": "union", "flags": ["i"] },
+    { "id": "sqli-keyword-select", "category": "sqli", "pattern": "select", "flags": ["i"] },
+    { "id": "sqli-keyword-drop", "category": "sqli", "pattern": "drop", "flags": ["i"] },
+    { "id": "pt-dotdot", "category": "path-traversal", "pattern": "(\\.\\./){2,}", "flags": [] },
+    { "id": "pt-dotdot-backslash", "category": "path-traversal", "pattern": "(\\.\\.\\\\){2,}", "flags": [] },
+    { "id": "pt-encoded-dotdot", "category": "path-traversal", "pattern": "(%2e%2e%2f){2,}", "flags": ["i"] },
+    { "id": "ci-chain-command", "category": "command-injection", "pattern": "[;&]\\s*(id|ls|cat|whoami|uname|nc|sh|bash|curl|wget|ping|rm)\\b", "flags": ["i"] },
+    { "id": "ci-pipe-command", "category": "command-injection", "pattern": "\\|\\s*(cat|ls|id|whoami|nc|sh|bash)\\b", "flags": ["i"] },
+    { "id": "ci-command-substitution", "category": "command-injection", "pattern": "`[^`]+`|\\$\\([^)]+\\)", "flags": [] }
+  ]
+}

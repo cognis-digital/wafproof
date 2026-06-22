@@ -1,0 +1,15 @@
+{
+  "name": "api-body-ruleset",
+  "description": "Structural rules for JSON and GraphQL request bodies. NoSQL rules look for query-operator keys ($ne, $gt, $where, $regex, ...) used as JSON keys, which never appear in a legitimate value payload. GraphQL rules look for pathological nesting depth and high-fan-out alias batching. Tuned so the benign payloads in api-corpus.json pass.",
+  "rules": [
+    { "id": "nosql-operator-key", "category": "nosql",
+      "pattern": "\"\\$(ne|gt|lt|gte|lte|in|nin|regex|where|exists|or|and)\"\\s*:",
+      "flags": ["i"] },
+    { "id": "gql-deep-nesting", "category": "graphql",
+      "pattern": "(\\{\\s*[A-Za-z_][\\w]*\\s*){5,}",
+      "flags": [] },
+    { "id": "gql-alias-fan-out", "category": "graphql",
+      "pattern": "([A-Za-z_]\\w*\\s*:\\s*[A-Za-z_]\\w*\\s*\\([^)]*\\)\\s*){3,}",
+      "flags": [] }
+  ]
+}

@@ -1,0 +1,47 @@
+# Example GitHub Actions workflow: gate WAF-rule coverage on every PR and
+# upload missed-canary / false-alarm findings to GitHub code scanning as SARIF.
+#
+# Copy this into .github/workflows/waf-coverage.yml in the repo that owns your
+# detection rules. It does two independent things:
+#   1. `wafproof report --fail-under` -> fails the PR if recall drops.
+#   2. `wafproof run --sarif` -> publishes FN/FP findings to the Security tab.
+name: waf-coverage
+
+on:
+  pull_request:
+    paths:
+      - "rules/**"
+      - "detection/**"
+
+permissions:
+  contents: read
+  security-events: write   # required to upload SARIF
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install wafproof
+        run: pip install git+https://github.com/cognis-digital/wafproof
+
+      # Emit SARIF for the Security tab. Do not fail the build here -- the gate
+      # below decides pass/fail; this step is pure reporting.
+      - name: Evaluate and emit SARIF
+        run: wafproof run --rules rules/waf.json --sarif wafproof.sarif
+        continue-on-error: true
+
+      - name: Upload findings to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: wafproof.sarif
+          category: wafproof
+
+      # Hard gate: block the PR if detection coverage regresses.
+      - name: Gate on recall
+        run: wafproof report --rules rules/waf.json --fail-under 0.95

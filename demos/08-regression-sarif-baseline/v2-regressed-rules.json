@@ -1,0 +1,16 @@
+{
+  "name": "simplified-ruleset-pr-482",
+  "description": "The ruleset as it would look after PR #482, which 'consolidated' the SQLi rules into a single tautology check to reduce regex evaluation cost. The change quietly drops union-based, comment-tail, and stacked-statement coverage. wafproof catches the regression as false negatives.",
+  "rules": [
+    { "id": "xss-script-open", "category": "xss", "pattern": "<\\s*script\\b", "flags": ["i"] },
+    { "id": "xss-event-handler", "category": "xss", "pattern": "<[^>]*\\bon[a-z]+\\s*=", "flags": ["i"] },
+    { "id": "xss-js-uri", "category": "xss", "pattern": "javascript\\s*:", "flags": ["i"] },
+    { "id": "sqli-tautology", "category": "sqli", "pattern": "'\\s*or\\s+'?\\d", "flags": ["i"] },
+    { "id": "pt-dotdot-slash", "category": "path-traversal", "pattern": "(\\.\\./){2,}", "flags": [] },
+    { "id": "pt-dotdot-backslash", "category": "path-traversal", "pattern": "(\\.\\.\\\\){2,}", "flags": [] },
+    { "id": "pt-encoded-dotdot", "category": "path-traversal", "pattern": "(%2e%2e%2f){2,}", "flags": ["i"] },
+    { "id": "ci-chain-command", "category": "command-injection", "pattern": "[;&]\\s*(id|ls|cat|whoami|uname|nc|sh|bash|curl|wget|ping|rm)\\b", "flags": ["i"] },
+    { "id": "ci-pipe-command", "category": "command-injection", "pattern": "\\|\\s*(cat|ls|id|whoami|nc|sh|bash)\\b", "flags": ["i"] },
+    { "id": "ci-command-substitution", "category": "command-injection", "pattern": "`[^`]+`|\\$\\([^)]+\\)", "flags": [] }
+  ]
+}

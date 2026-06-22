@@ -1,0 +1,39 @@
+{
+  "description": "A labeled corpus drawn from one web app's real request fields. The malicious entries are sanitized reproductions of payloads that hit a staging WAF; the benign entries are real, previously-blocked-by-mistake customer inputs that generated support tickets. Feed this through your own ruleset to tune for THIS application's traffic, not a generic corpus.",
+  "entries": [
+    { "id": "search-xss-1", "category": "xss", "label": "malicious",
+      "text": "<script>fetch('/api/me').then(r=>r.text())</script>",
+      "note": "reflected XSS attempt in the ?q= search parameter" },
+    { "id": "comment-xss-img", "category": "xss", "label": "malicious",
+      "text": "<img src=x onerror=this.src='/log?c='+document.cookie>",
+      "note": "stored XSS attempt in a product review body" },
+    { "id": "profile-bio-markdown", "category": "xss", "label": "benign",
+      "text": "I love **bold** text and the <strong>strong</strong> tag.",
+      "note": "real user bio using allowed markdown/HTML; must not be blocked" },
+    { "id": "support-msg-onload", "category": "xss", "label": "benign",
+      "text": "My page onload handler isn't firing in Safari, any ideas?",
+      "note": "real support message that mentions onload in prose" },
+
+    { "id": "login-sqli-tautology", "category": "sqli", "label": "malicious",
+      "text": "' OR 1=1 -- ", "note": "auth bypass attempt on the login form" },
+    { "id": "filter-sqli-union", "category": "sqli", "label": "malicious",
+      "text": "0 UNION SELECT email,password_hash FROM customers", "note": "union extraction via the sort= parameter" },
+    { "id": "name-oconnor", "category": "sqli", "label": "benign",
+      "text": "Siobhan O'Connor", "note": "real customer name with apostrophe; previously false-blocked" },
+    { "id": "review-text-drop", "category": "sqli", "label": "benign",
+      "text": "Order arrived fast; drop me a line if the size runs small.",
+      "note": "real review using 'drop' as ordinary English" },
+
+    { "id": "download-traversal", "category": "path-traversal", "label": "malicious",
+      "text": "../../../../etc/passwd", "note": "traversal in the ?file= download parameter" },
+    { "id": "download-encoded", "category": "path-traversal", "label": "malicious",
+      "text": "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd", "note": "url-encoded traversal in the same parameter" },
+    { "id": "asset-path-ok", "category": "path-traversal", "label": "benign",
+      "text": "uploads/2026/06/invoice-1042.pdf", "note": "legitimate generated asset path" },
+
+    { "id": "hostcheck-injection", "category": "command-injection", "label": "malicious",
+      "text": "8.8.8.8; cat /etc/passwd", "note": "command injection in a network-diagnostic 'ping host' tool" },
+    { "id": "hostcheck-ok", "category": "command-injection", "label": "benign",
+      "text": "8.8.8.8", "note": "a normal IP entered into the same diagnostic tool" }
+  ]
+}
