@@ -1,9 +1,11 @@
 """Command-line interface for wafproof.
 
 Subcommands:
-    run     evaluate a detector against the corpus and print a metrics table
-    corpus  list the labeled corpus (optionally filtered by category)
-    report  evaluate and apply a pass/fail gate on recall (CI use)
+    run       evaluate a detector against the corpus and print a metrics table
+    corpus    list the labeled corpus (optionally filtered by category)
+    report    evaluate and apply a pass/fail gate on recall (CI use)
+    evade     measure evasion-resistance under semantics-preserving mutation
+    diagnose  attribute matches to rules; find dead/overbroad/redundant rules
 
 wafproof is a defensive measurement tool. It does not send traffic anywhere; it
 only feeds local labeled strings through a detector you supply and counts hits.
@@ -17,6 +19,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .analyze import diagnose_ruleset, robustness
 from .corpus import builtin_corpus, validate_corpus
 from .detector import (
     RulesetError,
@@ -25,6 +28,7 @@ from .detector import (
     ruleset_detector,
 )
 from .metrics import Evaluation, evaluate
+from .mutate import TRANSFORM_IDS
 from .sarif import evaluation_to_sarif
 
 
@@ -193,6 +197,137 @@ def cmd_report(args) -> int:
     return 0 if passed else 1
 
 
+def _print_robustness(rep) -> None:
+    print("Evasion-resistance evaluation")
+    print("=" * 60)
+    print(f"  mutations applied : {rep.mutations_total}")
+    print(f"  mutations caught  : {rep.mutations_caught}")
+    print(f"  evasion-resistance: {_fmt_pct(rep.score)}")
+    if rep.uncaught_baseline:
+        print(
+            f"  (excluded {len(rep.uncaught_baseline)} canary(ies) the detector "
+            f"misses at baseline -- those are coverage gaps, see 'run')"
+        )
+    print()
+    print("By transform (lower = the evasion class your rules are blind to)")
+    print("-" * 60)
+    print(f"  {'transform':<20}{'caught':>9}{'total':>9}{'score':>9}")
+    for t, d in sorted(rep.per_transform.items(), key=lambda kv: (kv[1]["caught"] / kv[1]["total"] if kv[1]["total"] else 1.0, kv[0])):
+        sc = d["caught"] / d["total"] if d["total"] else 1.0
+        print(f"  {t:<20}{d['caught']:>9}{d['total']:>9}{sc * 100:8.1f}%")
+    print()
+    print("By category")
+    print("-" * 60)
+    print(f"  {'category':<20}{'caught':>9}{'total':>9}{'score':>9}")
+    for c, d in sorted(rep.per_category.items()):
+        sc = d["caught"] / d["total"] if d["total"] else 1.0
+        print(f"  {c:<20}{d['caught']:>9}{d['total']:>9}{sc * 100:8.1f}%")
+    weak = [c for c in rep.canaries if c.missed_transforms]
+    if weak:
+        print()
+        print("Brittle canaries (evaded by at least one mutation):")
+        for c in weak:
+            print(
+                f"  - [{c.category}] {c.id}: misses "
+                f"{', '.join(c.missed_transforms)}"
+            )
+
+
+def cmd_evade(args) -> int:
+    corpus = _load_corpus(args.corpus)
+    detector, _ = _build_detector(args)
+    only = None
+    if args.only:
+        only = [t.strip() for t in args.only.split(",") if t.strip()]
+    try:
+        rep = robustness(detector, corpus, only=only)
+    except ValueError as exc:
+        raise SystemExit(f"error: {exc}")
+    if args.json:
+        out = rep.as_dict()
+        if args.fail_under is not None:
+            out["gate"] = {
+                "metric": "evasion_resistance",
+                "value": round(rep.score, 6),
+                "fail_under": args.fail_under,
+                "passed": rep.score >= args.fail_under,
+            }
+        print(json.dumps(out, indent=2))
+    else:
+        _print_robustness(rep)
+        if args.fail_under is not None:
+            passed = rep.score >= args.fail_under
+            print()
+            print(
+                f"GATE [{'PASS' if passed else 'FAIL'}] evasion-resistance "
+                f"{rep.score * 100:.2f}% (threshold {args.fail_under * 100:.2f}%)"
+            )
+    if args.fail_under is not None and rep.score < args.fail_under:
+        return 1
+    return 0
+
+
+def _print_diagnosis(diag) -> None:
+    print("Ruleset diagnostics")
+    print("=" * 60)
+    print(f"  rules           : {len(diag.rules)}")
+    print(f"  dead rules      : {len(diag.dead_rules)}")
+    print(f"  overbroad rules : {len(diag.overbroad_rules)}")
+    print(f"  redundant pairs : {len(diag.redundant_pairs)}")
+    print()
+    print("Per rule")
+    print("-" * 60)
+    print(f"  {'rule':<26}{'mal':>5}{'ben':>5}  flags")
+    for r in diag.rules:
+        flags = []
+        if r.is_dead:
+            flags.append("DEAD")
+        if r.is_overbroad:
+            flags.append("OVERBROAD")
+        print(
+            f"  {r.id:<26}{len(r.malicious_hits):>5}{len(r.benign_hits):>5}  "
+            f"{' '.join(flags)}"
+        )
+    if diag.dead_rules:
+        print()
+        print("Dead rules (match nothing in the corpus -- maintenance debt):")
+        for r in diag.dead_rules:
+            print(f"  - {r.id}  /{r.pattern}/")
+    if diag.overbroad_rules:
+        print()
+        print("Overbroad rules (flag benign entries -- cause of false alarms):")
+        for r in diag.overbroad_rules:
+            print(f"  - {r.id}  flags benign: {', '.join(r.benign_hits)}")
+    if diag.redundant_pairs:
+        print()
+        print("Redundant rule pairs (same malicious hit-set, no benign hits):")
+        for a, b in diag.redundant_pairs:
+            print(f"  - {a}  ==  {b}")
+
+
+def cmd_diagnose(args) -> int:
+    corpus = _load_corpus(args.corpus)
+    if not args.rules:
+        raise SystemExit(
+            "error: diagnose requires --rules (a callable has no rules to "
+            "attribute matches to; use 'evade' for black-box robustness)"
+        )
+    try:
+        rules = load_ruleset(args.rules)
+    except RulesetError as exc:
+        raise SystemExit(f"error: {exc}")
+    diag = diagnose_ruleset(rules, corpus)
+    if args.json:
+        print(json.dumps(diag.as_dict(), indent=2))
+    else:
+        _print_diagnosis(diag)
+    if args.fail_on_dead and diag.dead_rules:
+        return 1
+    if args.fail_on_overbroad and diag.overbroad_rules:
+        return 1
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # argument parsing
 # ---------------------------------------------------------------------------
@@ -258,6 +393,51 @@ def build_parser() -> argparse.ArgumentParser:
         help="also write a SARIF 2.1.0 report of FN/FP findings ('-' for stdout)",
     )
     p_report.set_defaults(func=cmd_report)
+
+    p_evade = sub.add_parser(
+        "evade",
+        help="measure evasion-resistance under semantics-preserving mutation",
+    )
+    _add_detector_args(p_evade)
+    p_evade.add_argument(
+        "--only",
+        metavar="IDS",
+        help=(
+            "comma-separated transform ids to restrict to (default: all). "
+            "available: " + ", ".join(TRANSFORM_IDS)
+        ),
+    )
+    p_evade.add_argument(
+        "--fail-under",
+        type=float,
+        metavar="X",
+        help="exit non-zero if evasion-resistance is below X (0..1)",
+    )
+    p_evade.add_argument("--json", action="store_true", help="emit JSON results")
+    p_evade.set_defaults(func=cmd_evade)
+
+    p_diag = sub.add_parser(
+        "diagnose",
+        help="attribute matches to rules; find dead/overbroad/redundant rules",
+    )
+    p_diag.add_argument(
+        "--rules", metavar="FILE", help="path to a JSON regex ruleset (required)"
+    )
+    p_diag.add_argument(
+        "--corpus", metavar="FILE", help="use a custom corpus JSON file"
+    )
+    p_diag.add_argument(
+        "--fail-on-dead",
+        action="store_true",
+        help="exit non-zero if any rule matches nothing in the corpus",
+    )
+    p_diag.add_argument(
+        "--fail-on-overbroad",
+        action="store_true",
+        help="exit non-zero if any rule flags a benign entry",
+    )
+    p_diag.add_argument("--json", action="store_true", help="emit JSON results")
+    p_diag.set_defaults(func=cmd_diagnose)
 
     return parser
 

@@ -114,6 +114,50 @@ wafproof report --rules my_rules.json --fail-under 0.8
 echo $?   # 0 if recall >= 0.8, else 1
 ```
 
+### `wafproof evade`
+
+**100% recall on the canaries is not 100% safe.** A rule that catches
+`<script>` but misses `%3Cscript%3E` (which the server URL-decodes right back to
+`<script>`) is one trick away from useless. `evade` applies a catalog of
+documented, *semantics-preserving* mutations — URL-encoding (single and double),
+case-toggling, SQL `/**/` comment insertion, whitespace substitution, NUL-byte
+truncation, redundant path slashes, trailing padding — to the canaries your
+detector already catches, then re-measures. The fraction still caught is its
+**evasion-resistance score**, broken down by transform so you see *exactly which
+evasion class* your rules are blind to.
+
+```bash
+wafproof evade --rules examples/rules.json
+wafproof evade --rules my_rules.json --only url-encode,case-toggle
+wafproof evade --callable mypkg.detect:fn --fail-under 0.9   # CI gate
+```
+
+The shipped `examples/rules.json` scores a perfect `run` but only **~49%**
+evasion-resistance — it is blind to URL-encoding. The fix is to *normalize before
+matching*; see [`docs/EVASION_AND_DIAGNOSTICS.md`](docs/EVASION_AND_DIAGNOSTICS.md)
+and [`demos/09-evasion-resistance/`](demos/09-evasion-resistance/) for the full
+walkthrough that lifts the score to ~96% while keeping recall at 100%.
+
+> Strictly defensive: the mutations are applied only to *your own* canaries
+> against *your own* detector, locally, to measure and close gaps before an
+> attacker finds them. Nothing is sent anywhere.
+
+### `wafproof diagnose`
+
+When precision drops, `run` tells you *that* a benign entry was flagged but not
+*which rule* did it. `diagnose` attributes every corpus match back to the
+individual regex rule and flags three pathologies:
+
+- **dead** rules that match nothing in the corpus (stale debt, or a missing canary),
+- **overbroad** rules that match a *benign* entry (the direct cause of false alarms),
+- **redundant** rules with an identical malicious hit-set and no benign hits.
+
+```bash
+wafproof diagnose --rules my_rules.json
+wafproof diagnose --rules my_rules.json --fail-on-overbroad   # CI gate
+wafproof diagnose --rules my_rules.json --fail-on-dead --json
+```
+
 ## SARIF export (code scanning)
 
 Both `run` and `report` accept `--sarif FILE` (use `-` for stdout) to write a
@@ -138,7 +182,7 @@ shows a differential gate that fails only on findings a PR *introduces*.
 
 ## Demos
 
-The [`demos/`](demos/) directory holds eight self-contained, real-use-case
+The [`demos/`](demos/) directory holds nine self-contained, real-use-case
 scenarios — each a realistic input file in wafproof's own format plus a
 `SCENARIO.md` (where the data came from, the exact command, expected output, and
 how to act). Highlights:
@@ -159,6 +203,9 @@ how to act). Highlights:
   (`${jndi:...}`) including the nested-evasion shape.
 - **[08](demos/08-regression-sarif-baseline/)** a differential gate that fails
   only on findings a PR introduces vs a SARIF baseline.
+- **[09](demos/09-evasion-resistance/)** a ruleset with a perfect `run` is only
+  ~49% evasion-resistant; normalizing before matching lifts it to ~96% — proved
+  with `evade`, gated in CI.
 
 See [`demos/README.md`](demos/README.md) for the full index.
 

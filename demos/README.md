@@ -16,6 +16,7 @@ verified to actually produce the output its `SCENARIO.md` describes.
 | 06 | [graphql-nosql-corpus](06-graphql-nosql-corpus/) | define your own categories: NoSQL operator injection and GraphQL abuse |
 | 07 | [jndi-lookup-canary](07-jndi-lookup-canary/) | lookup/expression injection (`${jndi:...}`) including the nested-evasion shape |
 | 08 | [regression-sarif-baseline](08-regression-sarif-baseline/) | differential gate: fail only on findings a PR *introduces* vs a SARIF baseline |
+| 09 | [evasion-resistance](09-evasion-resistance/) | a ruleset with a perfect `run` is only ~49% evasion-resistant; normalize-before-match lifts it to ~96%, proved with `evade` and gated in CI |
 
 ## Quick tour
 
@@ -28,6 +29,9 @@ wafproof report --rules demos/02-coverage-gap-after-refactor/simplified-rules.js
 
 # 05 — emit SARIF for code scanning
 wafproof run --rules demos/05-ci-gate-and-sarif/candidate-rules.json --sarif -
+
+# 09 — perfect recall, brittle to evasion (~49%); see which class is blind
+wafproof evade --rules examples/rules.json
 ```
 
 All demos use only original, generic, illustrative canaries authored by Cognis

@@ -94,6 +94,37 @@ def test_demo07_lookup_rules_catch_nested_evasion():
     assert flagged["lookup-benign-shell-var"] is False  # ${HOME} left alone
 
 
+def test_demo09_normalizing_detector_lifts_evasion_resistance():
+    """The normalizing wrapper must keep perfect recall AND pass the 0.9
+    evasion-resistance gate, while the raw ruleset fails it -- the whole point
+    of demo 09."""
+    from wafproof.analyze import robustness
+
+    spec = str(
+        DEMOS / "09-evasion-resistance" / "normalizing_detector.py"
+    ) + ":detect"
+    detect = load_callable(spec)
+    # recall and FPR unchanged
+    ev = evaluate(detect, builtin_corpus())
+    assert ev.overall.recall == 1.0
+    assert ev.overall.false_positive_rate == 0.0
+    # robustness lifted above the gate
+    rep = robustness(detect, builtin_corpus())
+    assert rep.score >= 0.9
+    # while the raw literal ruleset is well below it
+    raw = ruleset_detector(
+        load_ruleset(Path(__file__).resolve().parent.parent / "examples" / "rules.json")
+    )
+    assert robustness(raw, builtin_corpus()).score < 0.6
+
+
+def test_demo09_gate_exit_codes():
+    spec = str(DEMOS / "09-evasion-resistance" / "normalizing_detector.py") + ":detect"
+    assert main(["evade", "--callable", spec, "--fail-under", "0.9"]) == 0
+    raw = str(Path(__file__).resolve().parent.parent / "examples" / "rules.json")
+    assert main(["evade", "--rules", raw, "--fail-under", "0.9"]) == 1
+
+
 def test_demo08_sarif_diff_detects_regression():
     import importlib.util
 
