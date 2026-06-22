@@ -1,0 +1,14 @@
+[package]
+name = "wafproof"
+version = "0.1.0"
+edition = "2021"
+description = "Rust port of wafproof's core check: regex ruleset vs labeled canary corpus. Defensive, offline."
+license = "Apache-2.0"
+repository = "https://github.com/cognis-digital/wafproof"
+
+[dependencies]
+regex = "1"
+
+[lib]
+name = "wafproof"
+path = "src/lib.rs"

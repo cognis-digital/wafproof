@@ -1,0 +1,15 @@
+{
+  "name": "@cognis-digital/wafproof",
+  "version": "0.1.0",
+  "description": "TypeScript port of wafproof's core check: regex ruleset vs labeled canary corpus. Defensive, offline.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "tsc && node --test dist/"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}

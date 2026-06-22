@@ -6,9 +6,17 @@ Subcommands:
     report    evaluate and apply a pass/fail gate on recall (CI use)
     evade     measure evasion-resistance under semantics-preserving mutation
     diagnose  attribute matches to rules; find dead/overbroad/redundant rules
+    scan      PASSIVE (default, offline): run a detector over provided input
+    enrich    PASSIVE (offline): annotate packages/SBOM with the bundled vuln DB
+    probe     ACTIVE (authorization-gated, OFF by default): smoke-test a
+              CONSENTED target's live WAF with detection canaries
 
-wafproof is a defensive measurement tool. It does not send traffic anywhere; it
-only feeds local labeled strings through a detector you supply and counts hits.
+PASSIVE modes (run/report/evade/diagnose/scan/enrich) never touch the network;
+they only read local input and feed strings through a detector you supply.
+
+The ACTIVE 'probe' mode is the sole exception and is OFF by default: it requires
+--authorized AND a --target-allowlist AND a positive --rate-limit, and refuses
+any host not in scope. It is a defensive smoke test of YOUR OWN perimeter.
 """
 
 from __future__ import annotations
@@ -27,9 +35,17 @@ from .detector import (
     load_ruleset,
     ruleset_detector,
 )
+from .enrich import enrich_packages, enrich_sbom_file
 from .metrics import Evaluation, evaluate
 from .mutate import TRANSFORM_IDS
+from .probe import (
+    AUTHORIZED_USE_BANNER,
+    AuthorizationError,
+    ScopeError,
+    probe_target,
+)
 from .sarif import evaluation_to_sarif
+from .scan import load_input_file, scan_items
 
 
 # ---------------------------------------------------------------------------
@@ -329,6 +345,115 @@ def cmd_diagnose(args) -> int:
 
 
 # ---------------------------------------------------------------------------
+# passive: scan provided input
+# ---------------------------------------------------------------------------
+def cmd_scan(args) -> int:
+    detector, rules = _build_detector(args)
+    try:
+        items = load_input_file(args.input, fmt=args.input_format)
+    except ValueError as exc:
+        raise SystemExit(f"error: {exc}")
+    report = scan_items(items, detector, rules=rules)
+    if args.json:
+        print(json.dumps(report.as_dict(), indent=2))
+    else:
+        print("Passive scan (offline)")
+        print("=" * 60)
+        print(f"  items scanned : {report.total}")
+        print(f"  flagged       : {len(report.flagged)}")
+        if report.flagged:
+            print()
+            print("Flagged input:")
+            for f in report.flagged:
+                rules_note = (
+                    f"  [{', '.join(f.matched_rules)}]" if f.matched_rules else ""
+                )
+                print(f"  - {f.id} ({f.source}): {f.text!r}{rules_note}")
+        else:
+            print()
+            print("  no input flagged by the detector")
+    if args.fail_on_flag and report.flagged:
+        return 1
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# passive: vuln-DB enrichment
+# ---------------------------------------------------------------------------
+def cmd_enrich(args) -> int:
+    if bool(args.sbom) == bool(args.package):
+        raise SystemExit("error: supply exactly one of --sbom or --package")
+    try:
+        if args.sbom:
+            report = enrich_sbom_file(args.sbom)
+        else:
+            names = [p.strip() for p in args.package if p.strip()]
+            report = enrich_packages(names, ecosystem=args.ecosystem)
+    except ValueError as exc:
+        raise SystemExit(f"error: {exc}")
+    if args.json:
+        print(json.dumps(report.as_dict(), indent=2))
+    else:
+        print("Offline vuln-DB enrichment")
+        print("=" * 60)
+        print(f"  packages checked    : {len(report.packages)}")
+        print(f"  vulnerable packages : {len(report.vulnerable_packages)}")
+        print(f"  total vulns         : {report.total_vulns}")
+        if report.vulnerable_packages:
+            print()
+            for p in report.vulnerable_packages:
+                eco = f" ({p.ecosystem})" if p.ecosystem else ""
+                print(f"  - {p.package}{eco}: {p.count} vuln(s)")
+                for vid in p.vuln_ids[:8]:
+                    print(f"      {vid}")
+                if p.count > 8:
+                    print(f"      ... and {p.count - 8} more")
+    if args.fail_on_vuln and report.total_vulns:
+        return 1
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# active: authorization-gated live probe
+# ---------------------------------------------------------------------------
+def cmd_probe(args) -> int:
+    allowlist = []
+    if args.target_allowlist:
+        allowlist = [h.strip() for h in args.target_allowlist.split(",") if h.strip()]
+    # The banner prints to stderr so it is always visible even with --json.
+    print(AUTHORIZED_USE_BANNER, file=sys.stderr)
+    try:
+        report = probe_target(
+            args.target,
+            authorized=args.authorized,
+            allowlist=allowlist,
+            rate_limit=args.rate_limit,
+            param=args.param,
+        )
+    except (AuthorizationError, ScopeError) as exc:
+        raise SystemExit(f"error: {exc}")
+    if args.json:
+        print(json.dumps(report.as_dict(), indent=2))
+    else:
+        print("Active probe (authorized)")
+        print("=" * 60)
+        print(f"  target        : {report.target}")
+        print(f"  canaries sent : {report.sent}")
+        print(f"  blocked       : {report.blocked_count}")
+        print(f"  block rate    : {_fmt_pct(report.block_rate)}")
+        print()
+        print("Per canary")
+        print("-" * 60)
+        for r in report.results:
+            mark = "BLOCKED" if r.blocked else "PASSED-THROUGH"
+            extra = f" ({r.error})" if r.error else f" [HTTP {r.status}]"
+            print(f"  {mark:<16} [{r.category}] {r.canary_id}{extra}")
+    if args.fail_under is not None and report.block_rate < args.fail_under:
+        return 1
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # argument parsing
 # ---------------------------------------------------------------------------
 def _add_detector_args(p: argparse.ArgumentParser) -> None:
@@ -438,6 +563,112 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_diag.add_argument("--json", action="store_true", help="emit JSON results")
     p_diag.set_defaults(func=cmd_diagnose)
+
+    # ----- passive: scan provided input -----------------------------------
+    p_scan = sub.add_parser(
+        "scan",
+        help="PASSIVE (offline): run a detector over provided input (file/HAR/JSON)",
+    )
+    p_scan.add_argument("--rules", metavar="FILE", help="path to a JSON regex ruleset")
+    p_scan.add_argument(
+        "--callable",
+        metavar="SPEC",
+        help="Python detector as 'module:function' or 'file.py:function'",
+    )
+    p_scan.add_argument(
+        "--input",
+        metavar="FILE",
+        required=True,
+        help="local input file to scan (lines / JSON array / HAR capture)",
+    )
+    p_scan.add_argument(
+        "--input-format",
+        choices=("lines", "json", "har"),
+        help="force the input format (default: auto-detect)",
+    )
+    p_scan.add_argument(
+        "--fail-on-flag",
+        action="store_true",
+        help="exit non-zero if any input is flagged (CI use)",
+    )
+    p_scan.add_argument("--json", action="store_true", help="emit JSON results")
+    p_scan.set_defaults(func=cmd_scan)
+
+    # ----- passive: vuln-DB enrichment ------------------------------------
+    p_enrich = sub.add_parser(
+        "enrich",
+        help="PASSIVE (offline): annotate packages/SBOM with the bundled vuln DB",
+    )
+    p_enrich.add_argument(
+        "--sbom", metavar="FILE", help="a CycloneDX or SPDX SBOM JSON file"
+    )
+    p_enrich.add_argument(
+        "--package",
+        metavar="NAME",
+        action="append",
+        help="a package name to look up (repeatable)",
+    )
+    p_enrich.add_argument(
+        "--ecosystem",
+        metavar="ECO",
+        help="restrict lookups to an ecosystem (PyPI/npm/Go/Maven/...)",
+    )
+    p_enrich.add_argument(
+        "--fail-on-vuln",
+        action="store_true",
+        help="exit non-zero if any package has a known vuln (CI use)",
+    )
+    p_enrich.add_argument("--json", action="store_true", help="emit JSON results")
+    p_enrich.set_defaults(func=cmd_enrich)
+
+    # ----- active: authorization-gated live probe -------------------------
+    p_probe = sub.add_parser(
+        "probe",
+        help=(
+            "ACTIVE (AUTHORIZED USE ONLY, off by default): smoke-test a CONSENTED "
+            "target's live WAF with detection canaries"
+        ),
+    )
+    p_probe.add_argument(
+        "--target", metavar="URL", required=True, help="the target URL to probe"
+    )
+    p_probe.add_argument(
+        "--authorized",
+        action="store_true",
+        help=(
+            "REQUIRED acknowledgement that you own or are authorized to test the "
+            "target; active mode refuses to run without it"
+        ),
+    )
+    p_probe.add_argument(
+        "--target-allowlist",
+        metavar="HOSTS",
+        help=(
+            "REQUIRED comma-separated allowlist of hostnames in scope; a target "
+            "host not in this list is refused"
+        ),
+    )
+    p_probe.add_argument(
+        "--rate-limit",
+        type=float,
+        default=1.0,
+        metavar="RPS",
+        help="max requests per second (must be > 0, default 1.0)",
+    )
+    p_probe.add_argument(
+        "--param",
+        default="q",
+        metavar="NAME",
+        help="query parameter to carry each canary (default 'q')",
+    )
+    p_probe.add_argument(
+        "--fail-under",
+        type=float,
+        metavar="X",
+        help="exit non-zero if the target's block rate is below X (0..1)",
+    )
+    p_probe.add_argument("--json", action="store_true", help="emit JSON results")
+    p_probe.set_defaults(func=cmd_probe)
 
     return parser
 

@@ -21,6 +21,43 @@ License: COCL 1.0
 
 ---
 
+## Passive vs. active modes
+
+`wafproof` has two modes, and the safe one is the default.
+
+**Passive (default — fully offline).** Every command except `probe`
+(`run`, `report`, `corpus`, `evade`, `diagnose`, `scan`, `enrich`) is passive:
+it reads only local input — a ruleset, a labeled corpus, a request-field dump, a
+saved HAR capture, an SBOM — feeds strings through a detector *you* supply, and
+counts hits. **No network. Ever.** This is the mode you use day to day.
+
+**Active (`probe`) — AUTHORIZED USE ONLY, off by default.** `probe` is the one
+command that touches the network. It sends `wafproof`'s own generic detection
+canaries to **a target you own or are explicitly authorized to test** and
+records whether that target's *own* WAF blocks them — a defensive smoke test of
+*your* perimeter, not an attack. It refuses to run unless **all** of these hold:
+
+- `--authorized` is passed (explicit operator acknowledgement; default OFF),
+- a non-empty `--target-allowlist` of in-scope hostnames is given, and the
+  target's host is in it (anything else is refused before a byte is sent),
+- a positive `--rate-limit` (requests/second, default `1.0`) is enforced so a
+  probe can never become a flood.
+
+There are no exploit payloads: the canaries are short, generic, length-capped
+strings meant to be *recognized and blocked*. A loud authorized-use banner
+prints on every active run. **Only ever point it at systems you are authorized
+to test — unauthorized probing may be illegal.**
+
+```bash
+# refused — active mode is off by default
+wafproof probe --target http://staging.internal/search --target-allowlist staging.internal
+# -> error: active probing is disabled by default; pass --authorized ...
+
+# allowed — explicit consent + scope + rate limit, against your own host
+wafproof probe --target http://staging.internal/search \
+  --authorized --target-allowlist staging.internal --rate-limit 2
+```
+
 ## Why
 
 When you write or tighten a WAF rule, a regex blocklist, or a custom detection
@@ -157,6 +194,75 @@ wafproof diagnose --rules my_rules.json
 wafproof diagnose --rules my_rules.json --fail-on-overbroad   # CI gate
 wafproof diagnose --rules my_rules.json --fail-on-dead --json
 ```
+
+### `wafproof scan` (passive, offline)
+
+Where `run`/`report` measure a detector against the *canary corpus*, `scan` runs
+it over **input you provide** — request-log fields, a saved HTTP capture, a field
+dump — and reports which entries are flagged, attributing each flag to the rule
+that fired. Still fully offline. Input format is auto-detected or forced with
+`--input-format`:
+
+- `lines` — one candidate per line (blank lines and `#` comments skipped),
+- `json` — a JSON array of strings, or of objects with a `text`/`value`/`input`
+  field,
+- `har` — a HAR 1.2 capture; the request URL, each decoded query value, and the
+  textual post body each become a candidate.
+
+```bash
+wafproof scan --rules my_rules.json --input requests.log
+wafproof scan --rules my_rules.json --input capture.har --json
+wafproof scan --callable mypkg:detect --input fields.json --fail-on-flag  # CI gate
+```
+
+### `wafproof enrich` (passive, offline)
+
+Annotate package names — or a whole SBOM — with the known vulnerabilities
+affecting them, using the **bundled offline vuln database**
+(`cognis_vulndb.jsonl.gz`, see below). No network, no API key.
+
+```bash
+wafproof enrich --package lodash --package django
+wafproof enrich --sbom sbom.cdx.json --json          # CycloneDX or SPDX
+wafproof enrich --sbom sbom.cdx.json --fail-on-vuln   # CI gate
+```
+
+### `wafproof probe` (ACTIVE — authorized use only, off by default)
+
+Smoke-test a **consented** target's live WAF with `wafproof`'s detection
+canaries and report the target's block rate. See
+[Passive vs. active modes](#passive-vs-active-modes) for the full safety gate —
+`--authorized`, `--target-allowlist`, and a positive `--rate-limit` are all
+mandatory, and any host not in scope is refused before a request is sent.
+
+```bash
+wafproof probe --target http://staging.internal/search \
+  --authorized --target-allowlist staging.internal --rate-limit 2
+wafproof probe --target http://localhost:8080/q \
+  --authorized --target-allowlist localhost --fail-under 0.9   # CI gate on YOUR host
+```
+
+> The active path is the only networked code in `wafproof`. It is a defensive
+> verification of your own perimeter. Do not point it at anything you are not
+> authorized to test.
+
+## Language ports
+
+The **core check** — compile a regex ruleset, run it over a labeled corpus, and
+report `TP/FP/FN/TN` with recall/precision/F1/FPR — is mirrored in four languages
+under [`ports/`](ports/) so it drops into non-Python stacks:
+
+| Port | Path | Test command |
+|------|------|--------------|
+| Go         | [`ports/go/`](ports/go/)       | `go test ./...` |
+| Rust       | [`ports/rust/`](ports/rust/)   | `cargo test` |
+| TypeScript | [`ports/ts/`](ports/ts/)       | `npm test` |
+| Shell      | [`ports/shell/`](ports/shell/) | `bash test_wafproof.sh` |
+
+Each port carries its own tests and is built/tested on GitHub runners by
+[`.github/workflows/ports.yml`](.github/workflows/ports.yml). The Python package
+remains the reference implementation with the full feature set (evade, diagnose,
+scan, enrich, probe, SARIF).
 
 ## SARIF export (code scanning)
 
@@ -299,17 +405,26 @@ wafproof/
 ├── wafproof/
 │   ├── __init__.py
 │   ├── __main__.py        # python -m wafproof
-│   ├── cli.py             # run / corpus / report
+│   ├── cli.py             # run / corpus / report / evade / diagnose / scan / enrich / probe
 │   ├── corpus.py          # built-in labeled corpus + validation
 │   ├── detector.py        # ruleset + callable loaders
 │   ├── metrics.py         # TP/FP/FN/TN, precision/recall/F1, per-category
-│   └── sarif.py           # SARIF 2.1.0 export of FN/FP findings
+│   ├── mutate.py          # semantics-preserving evasion transforms
+│   ├── analyze.py         # evasion-resistance + ruleset diagnostics
+│   ├── sarif.py           # SARIF 2.1.0 export of FN/FP findings
+│   ├── scan.py            # PASSIVE: scan provided input (lines/JSON/HAR)
+│   ├── enrich.py          # PASSIVE: vuln-DB enrichment of packages/SBOMs
+│   ├── probe.py           # ACTIVE (gated): authorized live-WAF smoke test
+│   ├── vulndb_local.py    # offline loader for the bundled vuln DB
+│   └── cognis_vulndb.jsonl.gz   # 262k real vulns, offline
+├── ports/                 # Go / Rust / TypeScript / Shell ports of the core check
+│   ├── go/  rust/  ts/  shell/
 ├── examples/
 │   └── rules.json         # authored sample ruleset (scores 100% on the corpus)
-├── demos/                 # 8 real-use-case scenarios, each with a SCENARIO.md
-├── tests/                 # pytest: metric math, ruleset eval, gate, SARIF, demos
+├── demos/                 # real-use-case scenarios, each with a SCENARIO.md
+├── tests/                 # pytest: metrics, eval, gate, SARIF, scan, enrich, probe
 ├── pyproject.toml
-└── .github/workflows/ci.yml
+└── .github/workflows/     # ci.yml (Python) + ports.yml (polyglot)
 ```
 
 ## Development
@@ -336,4 +451,16 @@ Maintained by **Cognis Digital**.
 
 ## Bundled vulnerability database
 
-Ships `wafproof/cognis_vulndb.jsonl.gz` — **262,351 real vulnerabilities** (OSV across 7 ecosystems) with detailed metadata; offline stdlib loader `vulndb_local.VulnDB`, air-gap ready.
+Ships `wafproof/cognis_vulndb.jsonl.gz` — **262,351 real vulnerabilities** (OSV
+across 7 ecosystems) with detailed metadata; offline stdlib loader
+`vulndb_local.VulnDB`, air-gap ready. It is wired into `wafproof enrich`, so a
+passive scan of an SBOM or a list of package names is annotated with the known
+vulnerabilities affecting them — entirely offline.
+
+```python
+from wafproof.vulndb_local import VulnDB
+db = VulnDB()
+db.count()                      # -> 262351
+db.by_package("lodash")         # records affecting lodash
+db.by_cve("CVE-2021-44228")     # lookup by CVE/GHSA alias
+```

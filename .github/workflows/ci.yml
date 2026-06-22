@@ -34,3 +34,10 @@ jobs:
           wafproof run --rules examples/rules.json
           wafproof report --rules examples/rules.json --fail-under 0.9
           wafproof corpus --category xss
+          printf '<script>alert(1)</script>\nassets/logo.png\n' > /tmp/in.txt
+          wafproof scan --rules examples/rules.json --input /tmp/in.txt
+          wafproof enrich --package lodash --json
+          # active mode must REFUSE without the full authorization gate (exit non-zero)
+          if wafproof probe --target http://localhost/x --target-allowlist localhost; then
+            echo "ERROR: probe ran without --authorized" && exit 1
+          fi

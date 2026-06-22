@@ -34,7 +34,7 @@ wafproof = "wafproof.cli:main"
 packages = ["wafproof"]
 
 [tool.setuptools.package-data]
-wafproof = ["py.typed"]
+wafproof = ["py.typed", "cognis_vulndb.jsonl.gz"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

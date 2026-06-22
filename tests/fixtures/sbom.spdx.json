@@ -1,0 +1,8 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "name": "fixture",
+  "packages": [
+    {"name": "lodash", "versionInfo": "4.17.4"},
+    {"name": "definitely-not-a-real-package-xyz", "versionInfo": "1.0.0"}
+  ]
+}
