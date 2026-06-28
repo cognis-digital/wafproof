@@ -21,6 +21,70 @@ License: COCL 1.0
 
 ---
 
+
+<!-- cognis:example:start -->
+## 🔎 Example output
+
+Real, reproducible output from the tool — runs offline:
+
+```console
+$ wafproof --version
+wafproof 0.1.0
+```
+
+```console
+$ wafproof --help
+usage: wafproof [-h] [--version]
+                {run,corpus,report,evade,diagnose,scan,enrich,probe} ...
+
+Measure how well your own detection rules catch known-bad inputs without
+flagging benign look-alikes. Defensive tooling -- it never sends traffic
+anywhere.
+
+positional arguments:
+  {run,corpus,report,evade,diagnose,scan,enrich,probe}
+    run                 evaluate a detector against the corpus
+    corpus              list the labeled corpus
+    report              evaluate and gate on recall (CI coverage check)
+    evade               measure evasion-resistance under semantics-preserving
+                        mutation
+    diagnose            attribute matches to rules; find
+                        dead/overbroad/redundant rules
+    scan                PASSIVE (offline): run a detector over provided input
+                        (file/HAR/JSON)
+    enrich              PASSIVE (offline): annotate packages/SBOM with the
+                        bundled vuln DB
+    probe               ACTIVE (AUTHORIZED USE ONLY, off by default): smoke-
+                        test a CONSENTED target's live WAF with detection
+                        canaries
+
+options:
+  -h, --help            show this help message and exit
+  --version             show program's version number and exit
+```
+
+> Blocks above are real `wafproof` output — reproduce them from a clone.
+
+**Sample result format** _(illustrative values — run on your own data for real findings):_
+
+```
+{
+"run": {
+"detector": "my_detector",
+"corpus": [
+{"input": "12345", "label": 0},
+{"input": "abcde", "label": 1}
+],
+"results": [
+{"input": "12346", "match": true, "rule": "rule_1"},
+{"input": "abcdef", "match": false, "rule": null}
+]
+}
+}
+```
+
+<!-- cognis:example:end -->
+
 ## Passive vs. active modes
 
 `wafproof` has two modes, and the safe one is the default.
